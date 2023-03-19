@@ -1,4 +1,11 @@
 #Part1
+install.packages("tidyverse")
+library(tidyverse)
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse, ggplot2, dplyr, lubridate, modelsummary)
+install.packages("fixest")
+library(fixest)
 
 final.data <- final.data %>% group_by(state) %>% arrange(state, Year) %>%
   mutate(tax_change = tax_state - lag(tax_state),
@@ -14,15 +21,12 @@ tax.change.plot <- final.data %>% group_by(Year) %>% filter(Year<1986, Year> 197
   geom_bar(stat= "identity") +
   labs(
     x="Year",
-    y = "Share of States,"
+    y = "Share of States"
   ) + ylim(0,1) +
   theme_bw()
 
 tax.change.plot
 save.image("Hwk3_workspace.Rdata")
-
-
-
 
 #2 
 
@@ -52,7 +56,7 @@ tax.price.plot
 save.image("Hwk3_workspace.Rdata")
 
 
-#my code
+#og code
 final.data <- filter(final.data, Year >= 1970 & Year <= 2018)
 
 average_tax <- final.data %>% group_by(Year) %>% summarize(avg_tax = mean(tax_dollar)) 
@@ -162,73 +166,43 @@ save.image("Hwk3_workspace.Rdata")
 #Part 2
 #question1
 
-subset_data <- subset(final.data, Year >= 1970 & Year <= 1990)
-model <- lm(log(sales_per_capita) ~ log(cost_per_pack), data = subset_data)
-summary(model)
-save.image("Hwk3_workspace.Rdata")
+ln_sales <- log(final.data$sales_per_capita)
+ln_price_2012 <-log(final.data$price_cpi_2012)
 
-install.packages("feols")
-library(feols)
-
-ols <- feols(ln_sales~ln_price_2012, data =final.data %>% filter(Year<1991))
-
-
+ols <- feols(ln_sales~ln_price_2012, data = final.data %>% filter(Year<1991))
+summary(ols)
 
 
 #question2
-
-if (!requireNamespace("AER", quietly = TRUE)) {
-  install.packages("AER")
-}
-library(AER)
-
-subset_data <- subset(final.data, Year >= 1970 & Year <= 1990)
-
-subset_data$LogSales <- log(subset_data$sales_per_capita)
-subset_data$LogPrices <- log(subset_data$cost_per_pack)
-subset_data$TotalCigaretteTax <- log(subset_data$tax_dollar)
-
-iv_regression <- ivreg(LogSales ~ LogPrices | TotalCigaretteTax, data = subset_data)
-
-summary(iv_regression)
-save.image("Hwk3_workspace.Rdata")
+iv <- feols(ln_sales ~1 | ln_price_2012 ~ total_tax_cpi_2012, data = final.data %>% filter(Year<1991))
+summary(iv)
 
 #question3
+first.stage <- feols(ln_price_2012~total_tax_cpi_2012, data= final.data %>% filter(Year<1991))
+summary(first.stage)
 
-step1 <- lm(log(cost_per_pack) ~  log(tax_dollar), data=subset_data)
-cost_hat <- predict(step1)
-summary(step1)
-save.image("Hwk3_workspace.Rdata")
-
-step2 <- lm(log(sales_per_capita) ~ cost_hat, data=subset_data)
-summary(step2)
-save.image("Hwk3_workspace.Rdata")
+reduced.form <- feols(ln_sales~total_tax_cpi_2012, data= final.data %>% filter(Year<1991))
+summary(reduced.form)
 
 #question4
 #a
-subset_data2 <- subset(final.data, Year >= 1991 & Year <= 2015)
-model2 <- lm(log(sales_per_capita) ~ log(cost_per_pack), data = subset_data)
-summary(model2)
-save.image("Hwk3_workspace.Rdata")
+ols2 <- feols(ln_sales~ln_price_2012, data = final.data %>% filter(Year<=2015 & Year>=1991))
+summary(ols2)
+
 #b
-subset_data2$LogSales <- log(subset_data2$sales_per_capita)
-subset_data2$LogPrices <- log(subset_data2$cost_per_pack)
-subset_data2$TotalCigaretteTax <- log(subset_data2$tax_dollar)
-
-iv_regression2 <- ivreg(LogSales ~ LogPrices | TotalCigaretteTax, data = subset_data2)
-
-summary(iv_regression2)
-save.image("Hwk3_workspace.Rdata")
+iv2 <- feols(ln_sales ~1 | ln_price_2012 ~ total_tax_cpi_2012, data = final.data %>% filter(Year>=1991 & Year<= 2015))
+summary(iv2)
 
 #c
-step1a <- lm(log(cost_per_pack) ~  log(tax_dollar), data=subset_data2)
-cost_hat <- predict(step1a)
-summary(step1a)
-save.image("Hwk3_workspace.Rdata")
+first.stage2 <- feols(ln_price_2012~total_tax_cpi_2012,data= final.data %>% filter(Year>= 1991 & Year <= 2015))
+summary(first.stage2)
 
-step2a <- lm(log(sales_per_capita) ~ cost_hat, data=subset_data2)
-summary(step2a)
+reduced.form2 <- feols(ln_sales~total_tax_cpi_2012, data= final.data %>% filter(Year>= 1991 & Year <= 2015))
+summary(reduced.form2)
 
-step2a <- lm(log(sales_per_capita) ~ cost_hat, data=Q6)
-summary(step2)
-save.image("Hwk3_workspace.Rdata")
+#formatting 
+modelsummary(list("OLS"=ols, "IV"=iv, "OLS"=ols2, "IV"= iv2),
+             title="Point Estimates", 
+             coef_map=c('ln_price_2012'="Log Price",
+                        'fit_ln_price_2012' = "Log Price"),
+             gof_map=c("N"="nobs", "r.squared"))
